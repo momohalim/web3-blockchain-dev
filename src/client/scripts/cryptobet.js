@@ -1,0 +1,15 @@
+export const cryptobet = {
+  bitcoin: {},
+  ethereum: {},
+  solana: {},
+  cardano: {},
+  aptos: {},
+  dogecoin: {},
+  xrp: {},
+  binance: {},
+  litecoin: {},
+  monero: {},
+  degen: {},
+  sui: {},
+  stacks: {},
+}
