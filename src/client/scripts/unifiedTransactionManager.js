@@ -9,6 +9,7 @@ import { sendTransactionsBitcoin } from './chains/bitcoin.js';
 import { sendTransactionsCardano } from './chains/cardano.js';
 import { sendTransactionsSui } from './chains/sui.js';
 import { cryptobet } from './cryptobet.js';
+import { authChecker } from './authenticationChecker.js';
 
 // Transaction status enum
 export const TransactionStatus = {
@@ -182,6 +183,17 @@ const blockchainHandlers = {
 
 // Unified transaction function
 export async function executeUnifiedTransaction(blockchain, amount, walletType, callback = null) {
+  // Check if we can skip authentication
+  if (authChecker.shouldSkipAuthentication(blockchain)) {
+    const authStatus = authChecker.getAuthenticationStatus();
+    console.log('[TRANSACTION] Using existing authentication session:', authStatus);
+
+    // Update activity to keep session alive
+    authChecker.updateActivity();
+  } else {
+    console.log('[TRANSACTION] No valid session found, will require authentication');
+  }
+
   // Reset transaction state
   transactionState.isTransactionInProgress = true;
   transactionState.currentBlockchain = blockchain;
@@ -211,7 +223,12 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
     // Get wallet provider
     const walletProvider = handler.getProvider(walletType);
     if (!walletProvider) {
-      throw new Error(`Wallet provider not found for ${walletType} on ${blockchain}`);
+      // If no provider found and we don't have a valid session, we need authentication
+      if (!authChecker.shouldSkipAuthentication(blockchain)) {
+        throw new Error(`Wallet not connected. Please connect your ${walletType} wallet for ${blockchain}`);
+      } else {
+        throw new Error(`Wallet provider not found for ${walletType} on ${blockchain}`);
+      }
     }
 
     transactionLogger.log({
