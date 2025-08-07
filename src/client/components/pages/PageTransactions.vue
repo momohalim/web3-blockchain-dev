@@ -147,6 +147,7 @@ import {
 
 // Import blockchain specific modules
 import { cryptobet } from '@/client/scripts/cryptobet';
+import { authChecker } from '@/client/scripts/authenticationChecker.js';
 
 const store = useGlobalStore();
 const { 
@@ -228,9 +229,12 @@ const walletInfo = computed(() => {
 });
 
 const canExecuteTransaction = computed(() => {
-  return selectedBlockchain.value && 
-         transactionAmount.value > 0 && 
-         is_authenticated.value && 
+  // Check if we have a valid session or are authenticated
+  const hasValidAuth = is_authenticated.value || authChecker.shouldSkipAuthentication(selectedBlockchain.value);
+
+  return selectedBlockchain.value &&
+         transactionAmount.value > 0 &&
+         hasValidAuth &&
          !isExecuting.value;
 });
 
@@ -291,13 +295,21 @@ function getWalletProvider(blockchainId) {
 async function executeTransaction() {
   if (!canExecuteTransaction.value) return;
 
+  // Check if we can skip authentication
+  if (authChecker.shouldSkipAuthentication(selectedBlockchain.value)) {
+    console.log('[TRANSACTION] Using existing session, skipping wallet connection');
+    authChecker.updateActivity();
+  } else if (!is_authenticated.value) {
+    throw new Error('Please connect your wallet first');
+  }
+
   isExecuting.value = true;
   currentTransaction.value = null;
 
   try {
     const walletProvider = getWalletProvider(selectedBlockchain.value);
-    if (!walletProvider) {
-      throw new Error('Wallet provider not found');
+    if (!walletProvider && !authChecker.shouldSkipAuthentication(selectedBlockchain.value)) {
+      throw new Error('Wallet provider not found. Please connect your wallet.');
     }
 
     const result = await executeBlockchainTransaction(
