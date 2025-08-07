@@ -6,6 +6,7 @@ import { ethers, BrowserProvider, parseEther, isAddress, formatEther } from 'eth
 import { ETHEREUM_PRIVATE_WALLET_ADDRESS } from "../env.js";
 import { cryptobet } from "../cryptobet.js";
 import { onFrontendAuthenticated } from "./shared.js";
+import { sessionManager } from "../sessionManager.js";
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -101,15 +102,27 @@ function selectWalletEthereum(wallet) {
 ////////////////////////////////////////////////////////////////////////
 
 async function ethereumAuth(provider, crypto, wallet) {
+  // Check if session already exists and is valid
+  if (sessionManager.shouldSkipAuthentication()) {
+    const currentSession = sessionManager.getCurrentSession();
+    if (currentSession && currentSession.chainType === crypto) {
+      console.log('[ETHEREUM] Using existing session, skipping authentication');
+      onFrontendAuthenticated(currentSession.walletAddress, currentSession.balance);
+      return;
+    }
+  }
+
   const { signer, address } = await connectEthereumWithProvidedWallet(provider);
   const nonce = await getNonceEthereum(address);
   const signature = await signNonceEthereum(signer, nonce);
+
   if (!sessionStorage.getItem("eth_token") || !sessionStorage.getItem("eth_refresh_token")) {
     const response = await axios.post('/api/initializeTokensEthereum', { address: address });
     const { token, refreshTokenEthereum } = response.data;
     sessionStorage.setItem("eth_token", token);
     sessionStorage.setItem("eth_refresh_token", refreshTokenEthereum);
   }
+
   const { success, token, refreshToken, balance } = await verifySignature({
     address,
     walletType: wallet,
@@ -117,15 +130,27 @@ async function ethereumAuth(provider, crypto, wallet) {
     provider,
     signature
   });
+
   if (!success) throw new Error("Authentication failed");
 
   if (success) {
     sessionStorage.setItem("eth_token", token);
     sessionStorage.setItem("eth_refresh_token", refreshToken);
     axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+    // Store session data in session manager
+    sessionManager.storeSession({
+      walletAddress: address,
+      balance: balance,
+      crypto: crypto,
+      wallet: wallet,
+      token: token,
+      refreshToken: refreshToken,
+      chainType: crypto
+    });
+
     onFrontendAuthenticated(address, balance);
   }
-
 }
 
 async function sendTransactionsEthereum(walletProvider, amountInEth) {
@@ -141,11 +166,12 @@ async function sendTransactionsEthereum(walletProvider, amountInEth) {
 }
 
 function disconnectWalletEthereum() {
-
   sessionStorage.removeItem('eth_token');
   sessionStorage.removeItem('eth_refresh_token');
   authEthereumToken = null;
 
+  // Clear session manager
+  sessionManager.clearSession();
 }
 
 ////////////////////////////////////////////////////////////////////////
