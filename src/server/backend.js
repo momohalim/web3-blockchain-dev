@@ -165,7 +165,28 @@ async function startServer() {
         res.status(500).json({ error: 'Internal server error' });
     });
 
-    app.listen(PORT_EXPRESS, () => console.log(`Express running on port ${PORT_EXPRESS}`));
+    const server = app.listen(PORT_EXPRESS, () => console.log(`Express running on port ${PORT_EXPRESS}`));
+
+    // Graceful shutdown handling
+    process.on('SIGINT', async () => {
+        console.log('\n🛑 Shutdown signal received, closing server...');
+
+        // Close Redis connections
+        if (redisConnected && effectiveRedisClient) {
+            try {
+                await effectiveRedisClient.quit();
+                console.log('✅ Redis connection closed gracefully');
+            } catch (error) {
+                console.error('❌ Error closing Redis connection:', error);
+            }
+        }
+
+        // Close Express server
+        server.close(() => {
+            console.log('✅ Express server closed gracefully');
+            process.exit(0);
+        });
+    });
 }
 
 startServer();
