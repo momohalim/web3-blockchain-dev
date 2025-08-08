@@ -128,7 +128,7 @@ async function startServer() {
         };
     }
     if (redisConnected) {
-        redisClient.on('error', (err) => console.error('Redis Client Error |', err));
+        effectiveRedisClient.on('error', (err) => console.error('Redis Client Error |', err));
     }
 
     const unprotectedRoutes = CreateUnprotectedRoutes(effectiveRedisClient);
