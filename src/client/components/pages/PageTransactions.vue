@@ -779,6 +779,66 @@ onMounted(() => {
   font-style: italic;
 }
 
+.current-session {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff88;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.current-session h3 {
+  color: #00ff88;
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+}
+
+.session-info {
+  display: grid;
+  gap: 10px;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-label {
+  font-weight: bold;
+  color: #00ff88;
+}
+
+.session-value {
+  color: white;
+  font-weight: bold;
+}
+
+.session-value.address {
+  font-family: monospace;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.auth-required {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid #f87171;
+  border-radius: 8px;
+  padding: 30px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.auth-required h3 {
+  color: #f87171;
+  margin: 0 0 15px 0;
+}
+
+.auth-required p {
+  color: #888;
+  margin: 0;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .blockchain-grid {
