@@ -37,14 +37,17 @@ function createMockRedisClient() {
   return {
     get: async () => null,
     set: async () => 'OK',
+    setEx: async () => 'OK',
     del: async () => 1,
     exists: async () => 0,
     expire: async () => 1,
+    incr: async () => 1,
     keys: async () => [],
     flushAll: async () => 'OK',
     on: () => {},
     quit: async () => {},
     disconnect: async () => {},
+    connect: async () => {},
     isOpen: true
   };
 }
