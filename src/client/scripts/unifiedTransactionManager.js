@@ -10,6 +10,7 @@ import { sendTransactionsCardano } from './chains/cardano.js';
 import { sendTransactionsSui } from './chains/sui.js';
 import { cryptobet } from './cryptobet.js';
 import { authChecker } from './authenticationChecker.js';
+import { useGlobalStore } from '../stores/global.js';
 
 // Transaction status enum
 export const TransactionStatus = {
@@ -181,8 +182,16 @@ const blockchainHandlers = {
   }
 };
 
-// Unified transaction function
-export async function executeUnifiedTransaction(blockchain, amount, walletType, callback = null) {
+// Unified transaction function - now uses global store values automatically
+export async function executeUnifiedTransaction(amount, callback = null) {
+  // Get current authenticated blockchain and wallet from global store
+  const globalStore = useGlobalStore();
+  const blockchain = globalStore.crypto_selected;
+  const walletType = globalStore.wallet_selected;
+
+  if (!blockchain || !walletType) {
+    throw new Error('No authenticated blockchain or wallet found. Please connect your wallet first.');
+  }
   // Check if we can skip authentication
   if (authChecker.shouldSkipAuthentication(blockchain)) {
     const authStatus = authChecker.getAuthenticationStatus();
