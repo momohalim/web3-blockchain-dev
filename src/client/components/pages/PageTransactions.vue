@@ -313,7 +313,7 @@ async function executeTransaction() {
   currentTransaction.value = null;
 
   try {
-    const walletProvider = getWalletProvider(selectedBlockchain.value);
+    const walletProvider = getWalletProvider();
     if (!walletProvider && !authChecker.shouldSkipAuthentication(selectedBlockchain.value)) {
       throw new Error('Wallet provider not found. Please connect your wallet.');
     }
