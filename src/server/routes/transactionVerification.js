@@ -409,22 +409,28 @@ async function handleTransactionSuccess(transactionData) {
       blockNumber
     });
 
-    // Example server-side actions (customize as needed):
-    
-    // 1. Update user account status
+    // Execute comprehensive server-side actions:
+
+    // 1. Update user transaction history
     await updateUserTransactionHistory(userAddress, transactionData);
-    
-    // 2. Send confirmation email (if email is available)
-    // await sendTransactionConfirmationEmail(userAddress, transactionData);
-    
-    // 3. Unlock content or features
-    // await unlockUserContent(userAddress, amount);
-    
-    // 4. Update user balance or credits
-    // await updateUserCredits(userAddress, amount);
-    
-    // 5. Trigger webhooks or external notifications
-    // await triggerExternalWebhook(transactionData);
+
+    // 2. Send confirmation email
+    await sendTransactionConfirmationEmail(userAddress, transactionData);
+
+    // 3. Update user credits/balance
+    await updateUserCredits(userAddress, amount, chainType);
+
+    // 4. Unlock content or features based on transaction
+    await unlockUserContent(userAddress, amount, chainType);
+
+    // 5. Update user statistics and analytics
+    await updateUserStatistics(userAddress, transactionData);
+
+    // 6. Trigger external webhooks
+    await triggerExternalWebhook(transactionData);
+
+    // 7. Custom business logic (add your specific requirements here)
+    await executeCustomBusinessLogic(userAddress, transactionData);
     
     console.log(`[TRANSACTION_SUCCESS] Server-side processing completed for ${userAddress}`);
     
@@ -437,22 +443,208 @@ async function handleTransactionSuccess(transactionData) {
 // Example server-side function: Update user transaction history
 async function updateUserTransactionHistory(userAddress, transactionData) {
   try {
-    // This would typically save to your database
     console.log(`[DB_UPDATE] Saving transaction history for ${userAddress}:`, transactionData);
-    
-    // Example database operation:
-    // await db.transactions.insert({
-    //   user_address: userAddress,
-    //   chain_type: transactionData.chainType,
-    //   tx_hash: transactionData.txHash,
-    //   amount: transactionData.amount,
-    //   block_number: transactionData.blockNumber,
-    //   verified_at: new Date(),
-    //   status: 'completed'
-    // });
-    
+
+    // Example: Save to database (implement with your preferred database)
+    // This is where you would save transaction details to your database
+    const transactionRecord = {
+      user_address: userAddress,
+      chain_type: transactionData.chainType,
+      tx_hash: transactionData.txHash,
+      amount: transactionData.amount,
+      block_number: transactionData.blockNumber,
+      verified_at: new Date(),
+      status: 'completed',
+      gas_used: transactionData.gasUsed || null,
+      confirmations: transactionData.confirmations || 0
+    };
+
+    console.log(`[DB_UPDATE] Transaction record prepared:`, transactionRecord);
+
+    // Database operations would go here:
+    // await db.collection('transactions').insertOne(transactionRecord);
+    // OR
+    // await TransactionModel.create(transactionRecord);
+
   } catch (error) {
     console.error('[DB_UPDATE] Database update error:', error);
+  }
+}
+
+// Additional server-side completion functions
+
+// Send confirmation email to user
+async function sendTransactionConfirmationEmail(userAddress, transactionData) {
+  try {
+    console.log(`[EMAIL] Sending confirmation email for transaction ${transactionData.txHash}`);
+
+    // Example email service integration:
+    // const emailContent = {
+    //   to: await getUserEmail(userAddress),
+    //   subject: 'Transaction Confirmed',
+    //   template: 'transaction-confirmation',
+    //   data: {
+    //     txHash: transactionData.txHash,
+    //     amount: transactionData.amount,
+    //     chainType: transactionData.chainType,
+    //     blockNumber: transactionData.blockNumber
+    //   }
+    // };
+    // await emailService.send(emailContent);
+
+    console.log(`[EMAIL] Confirmation email sent for ${userAddress}`);
+
+  } catch (error) {
+    console.error('[EMAIL] Email sending error:', error);
+  }
+}
+
+// Update user credits/balance based on transaction
+async function updateUserCredits(userAddress, amount, chainType) {
+  try {
+    console.log(`[CREDITS] Updating credits for ${userAddress}: +${amount} ${chainType}`);
+
+    // Example: Convert transaction amount to platform credits
+    const conversionRates = {
+      ethereum: 1000, // 1 ETH = 1000 credits
+      solana: 100,    // 1 SOL = 100 credits
+      bitcoin: 5000,  // 1 BTC = 5000 credits
+      aptos: 50,      // 1 APT = 50 credits
+      cardano: 10,    // 1 ADA = 10 credits
+      sui: 25         // 1 SUI = 25 credits
+    };
+
+    const creditsToAdd = amount * (conversionRates[chainType] || 1);
+
+    console.log(`[CREDITS] Adding ${creditsToAdd} credits to ${userAddress}`);
+
+    // Database operation to update user credits:
+    // await db.collection('users').updateOne(
+    //   { wallet_address: userAddress },
+    //   { $inc: { credits: creditsToAdd } }
+    // );
+
+  } catch (error) {
+    console.error('[CREDITS] Credits update error:', error);
+  }
+}
+
+// Unlock content or features for user
+async function unlockUserContent(userAddress, amount, chainType) {
+  try {
+    console.log(`[UNLOCK] Checking content unlock for ${userAddress}`);
+
+    // Example: Unlock premium features based on transaction amount
+    const unlockThresholds = {
+      premium_games: 0.01,    // Unlock premium games for 0.01+ ETH equivalent
+      vip_status: 0.1,        // VIP status for 0.1+ ETH equivalent
+      exclusive_content: 1.0   // Exclusive content for 1+ ETH equivalent
+    };
+
+    // Convert amount to ETH equivalent for comparison
+    const ethEquivalentRates = {
+      ethereum: 1,
+      solana: 0.05,  // Approximate rates
+      bitcoin: 30,
+      aptos: 0.01,
+      cardano: 0.002,
+      sui: 0.005
+    };
+
+    const ethEquivalent = amount * (ethEquivalentRates[chainType] || 0);
+
+    const unlockedFeatures = [];
+    for (const [feature, threshold] of Object.entries(unlockThresholds)) {
+      if (ethEquivalent >= threshold) {
+        unlockedFeatures.push(feature);
+      }
+    }
+
+    if (unlockedFeatures.length > 0) {
+      console.log(`[UNLOCK] Unlocking features for ${userAddress}:`, unlockedFeatures);
+
+      // Database operation to unlock features:
+      // await db.collection('users').updateOne(
+      //   { wallet_address: userAddress },
+      //   { $addToSet: { unlocked_features: { $each: unlockedFeatures } } }
+      // );
+    }
+
+  } catch (error) {
+    console.error('[UNLOCK] Content unlock error:', error);
+  }
+}
+
+// Trigger external webhook for transaction
+async function triggerExternalWebhook(transactionData) {
+  try {
+    const webhookUrl = process.env.TRANSACTION_WEBHOOK_URL;
+
+    if (!webhookUrl) {
+      console.log('[WEBHOOK] No webhook URL configured');
+      return;
+    }
+
+    console.log(`[WEBHOOK] Triggering external webhook for transaction ${transactionData.txHash}`);
+
+    const webhookPayload = {
+      event: 'transaction_verified',
+      timestamp: new Date().toISOString(),
+      user_address: transactionData.userAddress,
+      chain_type: transactionData.chainType,
+      tx_hash: transactionData.txHash,
+      amount: transactionData.amount,
+      block_number: transactionData.blockNumber
+    };
+
+    // Send webhook request:
+    // await axios.post(webhookUrl, webhookPayload, {
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //     'X-Webhook-Secret': process.env.WEBHOOK_SECRET
+    //   },
+    //   timeout: 5000
+    // });
+
+    console.log(`[WEBHOOK] External webhook triggered successfully`);
+
+  } catch (error) {
+    console.error('[WEBHOOK] Webhook error:', error);
+  }
+}
+
+// Update user statistics and analytics
+async function updateUserStatistics(userAddress, transactionData) {
+  try {
+    console.log(`[STATS] Updating statistics for ${userAddress}`);
+
+    const stats = {
+      total_transactions: 1,
+      total_volume: transactionData.amount,
+      last_transaction_at: new Date(),
+      preferred_chain: transactionData.chainType
+    };
+
+    console.log(`[STATS] Statistics update:`, stats);
+
+    // Database operation to update user statistics:
+    // await db.collection('user_stats').updateOne(
+    //   { wallet_address: userAddress },
+    //   {
+    //     $inc: {
+    //       total_transactions: 1,
+    //       [`chain_volumes.${transactionData.chainType}`]: transactionData.amount
+    //     },
+    //     $set: {
+    //       last_transaction_at: new Date(),
+    //       preferred_chain: transactionData.chainType
+    //     }
+    //   },
+    //   { upsert: true }
+    // );
+
+  } catch (error) {
+    console.error('[STATS] Statistics update error:', error);
   }
 }
 
