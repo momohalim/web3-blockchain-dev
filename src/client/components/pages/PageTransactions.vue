@@ -6,25 +6,34 @@
     </div>
 
     <div class="transaction-form-container">
-      <div class="blockchain-selector">
-        <h3>Select Blockchain</h3>
-        <div class="blockchain-grid">
-          <div 
-            v-for="blockchain in blockchains" 
-            :key="blockchain.id"
-            :class="['blockchain-card', { active: selectedBlockchain === blockchain.id }]"
-            @click="selectBlockchain(blockchain.id)"
-          >
-            <div class="blockchain-icon">{{ blockchain.icon }}</div>
-            <div class="blockchain-name">{{ blockchain.name }}</div>
-            <div class="blockchain-status" :class="blockchain.status">
-              {{ blockchain.status }}
-            </div>
+      <!-- Show current authenticated session -->
+      <div class="current-session" v-if="is_authenticated">
+        <h3>Current Authenticated Session</h3>
+        <div class="session-info">
+          <div class="session-item">
+            <span class="session-label">Blockchain:</span>
+            <span class="session-value">
+              {{ blockchains.find(b => b.id === selectedBlockchain)?.name || selectedBlockchain }}
+              ({{ blockchains.find(b => b.id === selectedBlockchain)?.symbol || selectedBlockchain }})
+            </span>
+          </div>
+          <div class="session-item">
+            <span class="session-label">Wallet:</span>
+            <span class="session-value">{{ wallet_selected }}</span>
+          </div>
+          <div class="session-item">
+            <span class="session-label">Address:</span>
+            <span class="session-value address">{{ wallet_connected_address }}</span>
           </div>
         </div>
       </div>
 
-      <div class="transaction-form" v-if="selectedBlockchain">
+      <div class="auth-required" v-else>
+        <h3>Authentication Required</h3>
+        <p>Please connect your wallet to execute transactions. Transactions will automatically use your authenticated blockchain and wallet.</p>
+      </div>
+
+      <div class="transaction-form" v-if="selectedBlockchain && is_authenticated">
         <div class="form-group">
           <label for="amount">Amount</label>
           <input 
