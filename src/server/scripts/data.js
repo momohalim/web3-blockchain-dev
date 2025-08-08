@@ -24,8 +24,8 @@ const pool = new Pool({
 let redisClient;
 let redisConnected = false;
 
-// Check if Redis should be used in development
-const useRedis = process.env.NODE_ENV === 'production' || process.env.USE_REDIS === 'true';
+// Redis enabled by default for all environments
+const useRedis = process.env.USE_REDIS !== 'false'; // Only disable if explicitly set to false
 
 if (useRedis) {
     redisClient = redis.createClient({
@@ -48,7 +48,7 @@ if (useRedis) {
         redisClient = createMockRedisClient();
     }
 } else {
-    console.log('[REDIS] Disabled for development');
+    console.log('[REDIS] Explicitly disabled via USE_REDIS=false');
     redisConnected = false;
     redisClient = createMockRedisClient();
 }
