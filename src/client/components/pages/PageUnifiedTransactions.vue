@@ -437,6 +437,48 @@ onMounted(() => {
   margin-bottom: 25px;
 }
 
+.current-session {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff88;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.current-session h3 {
+  color: #00ff88;
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+}
+
+.session-info {
+  display: grid;
+  gap: 10px;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-label {
+  font-weight: bold;
+  color: #00ff88;
+}
+
+.session-value {
+  color: white;
+  font-weight: bold;
+}
+
+.auth-required {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+  font-style: italic;
+}
+
 .form-label {
   display: block;
   font-weight: bold;
@@ -843,6 +885,14 @@ onMounted(() => {
   color: #666;
   padding: 40px;
   font-style: italic;
+}
+
+.auth-required {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid #f87171;
+  border-radius: 8px;
+  padding: 30px;
+  margin: 20px 0;
 }
 
 /* Responsive Design */
