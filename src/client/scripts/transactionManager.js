@@ -139,38 +139,102 @@ export class UnifiedTransactionManager {
           throw new Error(`Unsupported blockchain: ${chainType}`);
       }
 
-      // Update transaction status on success
-      transactionStatus.status = TRANSACTION_STATUS.SUCCESS;
+      // Update transaction status to pending verification
+      transactionStatus.status = TRANSACTION_STATUS.PENDING;
       transactionStatus.txHash = txHash;
       transactionStatus.endTime = Date.now();
-      
+
       this.activeTransactions.set(transactionId, transactionStatus);
 
-      // Log successful transaction
+      // Log transaction submitted for verification
       transactionLogger.log({
         transactionId,
         chainType,
         amount,
         txHash,
-        status: TRANSACTION_STATUS.SUCCESS,
-        action: 'transaction_completed',
+        status: TRANSACTION_STATUS.PENDING,
+        action: 'transaction_submitted_for_verification',
         duration: transactionStatus.endTime - transactionStatus.startTime
       });
 
-      // Execute callback for completion
+      // Execute callback for submission
       if (options.onStatusChange) {
         options.onStatusChange(transactionStatus);
       }
-      if (options.onComplete) {
-        options.onComplete(transactionStatus);
-      }
 
-      return {
-        success: true,
-        transactionId,
-        txHash,
-        status: TRANSACTION_STATUS.SUCCESS
-      };
+      // Send transaction to server for verification
+      try {
+        const verificationResult = await this.verifyTransactionOnServer({
+          chainType,
+          txHash,
+          expectedAmount: amount,
+          userAddress: this.getUserAddress()
+        });
+
+        if (verificationResult.verified) {
+          // Update transaction status on server verification success
+          transactionStatus.status = TRANSACTION_STATUS.SUCCESS;
+          transactionStatus.verified = true;
+          transactionStatus.blockNumber = verificationResult.blockNumber;
+
+          this.activeTransactions.set(transactionId, transactionStatus);
+
+          // Log verified transaction
+          transactionLogger.log({
+            transactionId,
+            chainType,
+            amount,
+            txHash,
+            status: TRANSACTION_STATUS.SUCCESS,
+            action: 'transaction_verified_by_server',
+            blockNumber: verificationResult.blockNumber
+          });
+
+          // Execute completion callback
+          if (options.onComplete) {
+            options.onComplete(transactionStatus);
+          }
+
+          return {
+            success: true,
+            transactionId,
+            txHash,
+            status: TRANSACTION_STATUS.SUCCESS,
+            verified: true,
+            blockNumber: verificationResult.blockNumber
+          };
+        } else {
+          // Server verification failed
+          throw new Error(`Server verification failed: ${verificationResult.error}`);
+        }
+      } catch (verificationError) {
+        console.error('[VERIFICATION] Server verification failed:', verificationError);
+
+        // Update transaction status to failed verification
+        transactionStatus.status = TRANSACTION_STATUS.FAILED;
+        transactionStatus.error = `Verification failed: ${verificationError.message}`;
+        transactionStatus.verified = false;
+
+        this.activeTransactions.set(transactionId, transactionStatus);
+
+        // Log verification failure
+        transactionLogger.log({
+          transactionId,
+          chainType,
+          amount,
+          txHash,
+          status: TRANSACTION_STATUS.FAILED,
+          action: 'transaction_verification_failed',
+          error: verificationError.message
+        });
+
+        // Execute error callback
+        if (options.onError) {
+          options.onError(verificationError, transactionStatus);
+        }
+
+        throw verificationError;
+      }
 
     } catch (error) {
       // Update transaction status on failure
