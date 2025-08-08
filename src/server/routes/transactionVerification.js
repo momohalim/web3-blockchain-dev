@@ -648,4 +648,66 @@ async function updateUserStatistics(userAddress, transactionData) {
   }
 }
 
+// Custom business logic - customize this for your specific requirements
+async function executeCustomBusinessLogic(userAddress, transactionData) {
+  try {
+    console.log(`[CUSTOM] Executing custom business logic for ${userAddress}`);
+
+    const { chainType, amount, txHash, blockNumber } = transactionData;
+
+    // Example custom logic based on your application requirements:
+
+    // Game-specific logic for a gaming platform:
+    if (amount >= 0.1) {
+      console.log(`[CUSTOM] Large transaction detected, granting bonus rewards`);
+      // Grant special rewards for large transactions
+    }
+
+    // VIP tier management:
+    const userTotalVolume = await getUserTotalTransactionVolume(userAddress);
+    if (userTotalVolume > 1.0) {
+      console.log(`[CUSTOM] Promoting user to VIP tier`);
+      // Update user tier to VIP
+    }
+
+    // Referral program:
+    const referrer = await getUserReferrer(userAddress);
+    if (referrer) {
+      console.log(`[CUSTOM] Crediting referral bonus to ${referrer}`);
+      // Credit referral bonus
+    }
+
+    // Seasonal events or promotions:
+    const isSpecialEvent = await checkForActivePromotions();
+    if (isSpecialEvent) {
+      console.log(`[CUSTOM] Applying special event bonus`);
+      // Apply event-specific bonuses
+    }
+
+    console.log(`[CUSTOM] Custom business logic completed for ${userAddress}`);
+
+  } catch (error) {
+    console.error('[CUSTOM] Custom business logic error:', error);
+  }
+}
+
+// Helper functions for custom business logic
+async function getUserTotalTransactionVolume(userAddress) {
+  // This would query your database for user's total transaction volume
+  // return await db.collection('user_stats').findOne({ wallet_address: userAddress })?.total_volume || 0;
+  return 0; // Placeholder
+}
+
+async function getUserReferrer(userAddress) {
+  // This would query your database for user's referrer
+  // return await db.collection('users').findOne({ wallet_address: userAddress })?.referred_by;
+  return null; // Placeholder
+}
+
+async function checkForActivePromotions() {
+  // This would check your database/config for active promotions
+  // return await db.collection('promotions').findOne({ active: true, start_date: { $lte: new Date() }, end_date: { $gte: new Date() } });
+  return false; // Placeholder
+}
+
 export default CreateTransactionVerificationRoutes;
