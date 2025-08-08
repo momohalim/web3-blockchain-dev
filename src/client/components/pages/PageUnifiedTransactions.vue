@@ -213,11 +213,19 @@ import {
   TransactionStatus
 } from '@/client/scripts/unifiedTransactionManager.js';
 import { cryptobet } from '@/client/scripts/cryptobet.js';
+import { useGlobalStore } from '@/client/stores/global.js';
+import { storeToRefs } from 'pinia';
+
+// Get global store values
+const globalStore = useGlobalStore();
+const { crypto_selected, wallet_selected, is_authenticated } = storeToRefs(globalStore);
 
 // Reactive data
-const selectedBlockchain = ref('');
-const selectedWallet = ref('');
 const amount = ref(0);
+
+// Use global store values automatically
+const selectedBlockchain = computed(() => crypto_selected.value);
+const selectedWallet = computed(() => wallet_selected.value);
 
 // Computed properties
 const supportedBlockchains = computed(() => getSupportedBlockchains());
@@ -225,9 +233,10 @@ const supportedBlockchains = computed(() => getSupportedBlockchains());
 const logs = computed(() => transactionLogger.getLogs());
 
 const canExecuteTransaction = computed(() => {
-  return selectedBlockchain.value && 
-         selectedWallet.value && 
-         amount.value > 0 && 
+  return selectedBlockchain.value &&
+         selectedWallet.value &&
+         amount.value > 0 &&
+         is_authenticated.value &&
          !transactionState.isTransactionInProgress;
 });
 
@@ -396,11 +405,7 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
-// Watch for blockchain change to reset wallet selection
-watch(selectedBlockchain, (newBlockchain) => {
-  selectedWallet.value = '';
-  amount.value = 0;
-});
+// Remove blockchain change watcher since we're using global values
 
 // Lifecycle
 onMounted(() => {
