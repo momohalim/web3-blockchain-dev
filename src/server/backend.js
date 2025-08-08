@@ -28,6 +28,7 @@ import createAuthRouterAptos from './routes/authAptos.js';
 import createAuthRouterSolana from './routes/authSolana.js';
 import CreateProtectedRoutes from './routes/protected.js';
 import CreateUnprotectedRoutes from './routes/unprotected.js';
+import CreateTransactionVerificationRoutes from './routes/transactionVerification.js';
 
 import './scripts/data.js'; // Import the data module to initialize the database connection
 import './scripts/websocketServer.js'; // Import the WebSocket server
@@ -146,7 +147,9 @@ async function startServer() {
     app.use('/api', authRoutesSolana);
 
     const protectedRoutes = CreateProtectedRoutes(effectiveRedisClient);
+    const transactionVerificationRoutes = CreateTransactionVerificationRoutes(effectiveRedisClient);
     app.use('/api', protectedRoutes);
+    app.use('/api/verify', transactionVerificationRoutes);
 
     // Serve static files from the dist folder
     const distPath = path.resolve(process.cwd(), 'dist');
