@@ -328,8 +328,6 @@ async function executeTransaction() {
     }
 
     const result = await executeBlockchainTransaction(
-      selectedBlockchain.value,
-      walletProvider,
       transactionAmount.value,
       {
         onStatusChange: (status) => {
