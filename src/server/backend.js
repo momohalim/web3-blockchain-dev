@@ -81,8 +81,8 @@ async function startServer() {
     //     next();
     // });
     // d:/Work/2025/CyberBet.Games/source/database-update/database_update/databases/mongodb/data
-    // Check if Redis should be used in development
-    const useRedis = process.env.NODE_ENV === 'production' || process.env.USE_REDIS === 'true';
+    // Redis enabled by default for all environments
+    const useRedis = process.env.USE_REDIS !== 'false'; // Only disable if explicitly set to false
 
     let redisConnected = false;
     let effectiveRedisClient;
@@ -107,7 +107,7 @@ async function startServer() {
             effectiveRedisClient = createMockRedisClient();
         }
     } else {
-        console.log('⚠️  Redis disabled for development');
+        console.log('⚠️  Redis explicitly disabled via USE_REDIS=false');
         redisConnected = false;
         effectiveRedisClient = createMockRedisClient();
     }
