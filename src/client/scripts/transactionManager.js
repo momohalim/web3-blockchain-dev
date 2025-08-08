@@ -18,6 +18,9 @@ import { sendTransactionsSolana } from './chains/solana.js';
 import { sendTransactionsBitcoin } from './chains/bitcoin.js';
 import { sendTransactionsCardano } from './chains/cardano.js';
 import { sendTransactionsSui } from './chains/sui.js';
+import { useGlobalStore } from '../stores/global.js';
+import { authChecker } from './authenticationChecker.js';
+import { cryptobet } from './cryptobet.js';
 
 // Transaction status constants
 export const TRANSACTION_STATUS = {
@@ -318,8 +321,25 @@ export class UnifiedTransactionManager {
 // Global transaction manager instance
 export const transactionManager = new UnifiedTransactionManager();
 
-// Convenience function for executing transactions
-export async function executeBlockchainTransaction(chainType, walletProvider, amount, callbacks = {}) {
+// Convenience function for executing transactions - now uses global store values automatically
+export async function executeBlockchainTransaction(amount, callbacks = {}) {
+  // Get values from global store
+  const globalStore = useGlobalStore();
+  const chainType = globalStore.crypto_selected;
+  const walletType = globalStore.wallet_selected;
+
+  if (!chainType || !walletType) {
+    throw new Error('No authenticated blockchain or wallet found. Please connect your wallet first.');
+  }
+
+  // Get wallet provider from cryptobet
+  const walletProvider = cryptobet[chainType] && cryptobet[chainType][walletType] ?
+                         cryptobet[chainType][walletType].provider : null;
+
+  if (!walletProvider && !authChecker.shouldSkipAuthentication(chainType)) {
+    throw new Error(`Wallet provider not found for ${walletType} on ${chainType}`);
+  }
+
   return await transactionManager.executeTransaction(chainType, walletProvider, amount, callbacks);
 }
 
