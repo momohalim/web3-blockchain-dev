@@ -187,4 +187,16 @@ async function refreshJWT(refreshToken) {
   }
 }
 
+// Graceful shutdown for Redis
+process.on('SIGINT', async () => {
+  if (redisConnected && redisClient) {
+    try {
+      await redisClient.quit();
+      console.log('[JWT] Redis connection closed gracefully');
+    } catch (error) {
+      console.error('[JWT] Error closing Redis connection:', error);
+    }
+  }
+});
+
 export { generateJWT, verifyJWT, authenticateJWT, generateRefreshToken, verifyRefreshToken, revokeJWT, refreshJWT };
