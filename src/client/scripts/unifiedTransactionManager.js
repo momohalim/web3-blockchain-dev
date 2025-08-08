@@ -391,8 +391,15 @@ export function clearTransactionHistory() {
   transactionHistory.splice(0);
 }
 
-// Test transaction function with small amounts
-export async function testTransaction(blockchain, walletType, callback = null) {
+// Test transaction function with small amounts - now uses global store
+export async function testTransaction(callback = null) {
+  const globalStore = useGlobalStore();
+  const blockchain = globalStore.crypto_selected;
+
+  if (!blockchain) {
+    throw new Error('No authenticated blockchain found. Please connect your wallet first.');
+  }
+
   const testAmounts = {
     ethereum: 0.0001,  // 0.0001 ETH
     solana: 0.001,     // 0.001 SOL
@@ -407,5 +414,5 @@ export async function testTransaction(blockchain, walletType, callback = null) {
     throw new Error(`Test amount not defined for ${blockchain}`);
   }
 
-  return await executeUnifiedTransaction(blockchain, amount, walletType, callback);
+  return await executeUnifiedTransaction(amount, callback);
 }
