@@ -193,6 +193,18 @@ async function redeemCode(walletAddress, code) {
 
 ////////////////////////////////////////////////////////////////
 
+// Graceful shutdown for Redis
+process.on('SIGINT', async () => {
+  if (redisConnected && redisClient) {
+    try {
+      await redisClient.quit();
+      console.log('[REDIS] Connection closed gracefully');
+    } catch (error) {
+      console.error('[REDIS] Error closing connection:', error);
+    }
+  }
+});
+
 export {
     getUserData,
     onAuthentication,
