@@ -158,8 +158,8 @@ const {
   wallet_selected 
 } = storeToRefs(store);
 
-// Component state
-const selectedBlockchain = ref('');
+// Component state - automatically use global store values
+const selectedBlockchain = computed(() => crypto_selected.value);
 const transactionAmount = ref(0.001);
 const isExecuting = ref(false);
 const currentTransaction = ref(null);
@@ -238,12 +238,12 @@ const canExecuteTransaction = computed(() => {
          !isExecuting.value;
 });
 
-// Methods
-function selectBlockchain(blockchainId) {
-  selectedBlockchain.value = blockchainId;
-  // Update blockchain status based on wallet connectivity
-  updateBlockchainStatus(blockchainId);
-}
+// Methods - remove manual selection since we use global store
+// function selectBlockchain(blockchainId) {
+//   selectedBlockchain.value = blockchainId;
+//   // Update blockchain status based on wallet connectivity
+//   updateBlockchainStatus(blockchainId);
+// }
 
 function updateBlockchainStatus(blockchainId) {
   const blockchain = blockchains.value.find(b => b.id === blockchainId);
@@ -273,20 +273,26 @@ function checkWalletAvailability(blockchainId) {
   }
 }
 
-function getWalletProvider(blockchainId) {
+function getWalletProvider() {
+  // Always use the global store selected wallet and blockchain
+  const blockchainId = selectedBlockchain.value;
+  const walletId = wallet_selected.value;
+
+  if (!blockchainId || !walletId) return null;
+
   switch (blockchainId) {
     case 'ethereum':
-      return cryptobet.ethereum[wallet_selected.value]?.provider;
+      return cryptobet.ethereum[walletId]?.provider;
     case 'solana':
-      return cryptobet.solana[wallet_selected.value]?.provider;
+      return cryptobet.solana[walletId]?.provider;
     case 'bitcoin':
-      return cryptobet.bitcoin[wallet_selected.value]?.provider;
+      return cryptobet.bitcoin[walletId]?.provider;
     case 'aptos':
-      return cryptobet.aptos[wallet_selected.value]?.provider;
+      return cryptobet.aptos[walletId]?.provider;
     case 'cardano':
-      return cryptobet.cardano[wallet_selected.value]?.provider;
+      return cryptobet.cardano[walletId]?.provider;
     case 'sui':
-      return cryptobet.sui[wallet_selected.value]?.provider;
+      return cryptobet.sui[walletId]?.provider;
     default:
       return null;
   }
