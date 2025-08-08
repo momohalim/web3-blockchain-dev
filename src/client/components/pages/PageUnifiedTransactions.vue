@@ -7,43 +7,26 @@
 
     <!-- Transaction Form -->
     <div class="transaction-form">
-      <div class="form-section">
-        <label class="form-label">Select Blockchain</label>
-        <select 
-          v-model="selectedBlockchain" 
-          class="form-select"
-          :disabled="transactionState.isTransactionInProgress"
-        >
-          <option value="">Choose blockchain...</option>
-          <option 
-            v-for="blockchain in supportedBlockchains" 
-            :key="blockchain" 
-            :value="blockchain"
-          >
-            {{ getBlockchainInfo(blockchain)?.name || blockchain }} ({{ getBlockchainInfo(blockchain)?.symbol || blockchain }})
-          </option>
-        </select>
+      <!-- Show current authenticated blockchain and wallet -->
+      <div class="current-session" v-if="is_authenticated">
+        <h3>Current Session</h3>
+        <div class="session-info">
+          <div class="session-item">
+            <span class="session-label">Blockchain:</span>
+            <span class="session-value">{{ getBlockchainInfo(selectedBlockchain)?.name || selectedBlockchain }} ({{ getBlockchainInfo(selectedBlockchain)?.symbol || selectedBlockchain }})</span>
+          </div>
+          <div class="session-item">
+            <span class="session-label">Wallet:</span>
+            <span class="session-value">{{ formatWalletName(selectedWallet) }}</span>
+          </div>
+        </div>
       </div>
 
-      <div class="form-section" v-if="selectedBlockchain">
-        <label class="form-label">Select Wallet</label>
-        <select 
-          v-model="selectedWallet" 
-          class="form-select"
-          :disabled="transactionState.isTransactionInProgress"
-        >
-          <option value="">Choose wallet...</option>
-          <option 
-            v-for="wallet in getAvailableWallets(selectedBlockchain)" 
-            :key="wallet" 
-            :value="wallet"
-          >
-            {{ formatWalletName(wallet) }}
-          </option>
-        </select>
+      <div class="auth-required" v-else>
+        <p>Please authenticate with a wallet to execute transactions.</p>
       </div>
 
-      <div class="form-section" v-if="selectedWallet">
+      <div class="form-section" v-if="selectedBlockchain && selectedWallet && is_authenticated">
         <label class="form-label">
           Amount ({{ getBlockchainInfo(selectedBlockchain)?.symbol || selectedBlockchain }})
         </label>
@@ -70,7 +53,7 @@
       </div>
 
       <!-- Transaction Controls -->
-      <div class="transaction-controls" v-if="selectedBlockchain && selectedWallet">
+      <div class="transaction-controls" v-if="selectedBlockchain && selectedWallet && is_authenticated">
         <button 
           @click="executeTransaction"
           class="btn btn-primary transaction-btn"
