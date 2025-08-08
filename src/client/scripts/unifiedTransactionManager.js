@@ -251,8 +251,8 @@ export async function executeUnifiedTransaction(amount, callback = null) {
     // Execute transaction
     const transactionHash = await handler.sendTransaction(amount, walletProvider, walletType);
     
-    // Update state on success
-    transactionState.currentStatus = TransactionStatus.SUCCESS;
+    // Update state to pending verification
+    transactionState.currentStatus = TransactionStatus.PENDING;
     transactionState.transactionHash = transactionHash;
     transactionState.lastTransactionResult = {
       blockchain,
@@ -260,7 +260,7 @@ export async function executeUnifiedTransaction(amount, callback = null) {
       amount,
       hash: transactionHash,
       timestamp: new Date().toISOString(),
-      status: TransactionStatus.SUCCESS
+      status: TransactionStatus.PENDING
     };
 
     transactionLogger.log({
@@ -268,9 +268,58 @@ export async function executeUnifiedTransaction(amount, callback = null) {
       walletType,
       amount,
       transactionHash,
-      message: `Transaction successful! Hash: ${transactionHash}`,
-      status: TransactionStatus.SUCCESS
+      message: `Transaction submitted for verification. Hash: ${transactionHash}`,
+      status: TransactionStatus.PENDING
     });
+
+    // Send transaction to server for verification
+    try {
+      const verificationResult = await verifyTransactionOnServer({
+        chainType: blockchain,
+        txHash: transactionHash,
+        expectedAmount: amount,
+        userAddress: getUserAddress()
+      });
+
+      if (verificationResult.verified) {
+        // Update transaction status on server verification success
+        transactionState.currentStatus = TransactionStatus.SUCCESS;
+        transactionState.lastTransactionResult.status = TransactionStatus.SUCCESS;
+        transactionState.lastTransactionResult.verified = true;
+        transactionState.lastTransactionResult.blockNumber = verificationResult.blockNumber;
+
+        transactionLogger.log({
+          blockchain,
+          walletType,
+          amount,
+          transactionHash,
+          message: `Transaction verified by server! Block: ${verificationResult.blockNumber}`,
+          status: TransactionStatus.SUCCESS
+        });
+      } else {
+        throw new Error(`Server verification failed: ${verificationResult.error}`);
+      }
+    } catch (verificationError) {
+      console.error('[VERIFICATION] Server verification failed:', verificationError);
+
+      // Update transaction status to failed verification
+      transactionState.currentStatus = TransactionStatus.FAILED;
+      transactionState.error = `Verification failed: ${verificationError.message}`;
+      transactionState.lastTransactionResult.status = TransactionStatus.FAILED;
+      transactionState.lastTransactionResult.error = verificationError.message;
+
+      transactionLogger.log({
+        blockchain,
+        walletType,
+        amount,
+        transactionHash,
+        message: `Transaction verification failed: ${verificationError.message}`,
+        status: TransactionStatus.FAILED,
+        error: verificationError.message
+      });
+
+      throw verificationError;
+    }
 
     // Execute callback if provided
     if (callback && typeof callback === 'function') {
@@ -281,7 +330,8 @@ export async function executeUnifiedTransaction(amount, callback = null) {
           walletType,
           amount,
           transactionHash,
-          status: TransactionStatus.SUCCESS
+          status: TransactionStatus.SUCCESS,
+          verified: true
         });
       } catch (callbackError) {
         console.error('[TRANSACTION] Callback execution failed:', callbackError);
@@ -294,7 +344,8 @@ export async function executeUnifiedTransaction(amount, callback = null) {
       walletType,
       amount,
       transactionHash,
-      status: TransactionStatus.SUCCESS
+      status: TransactionStatus.SUCCESS,
+      verified: true
     };
 
   } catch (error) {
