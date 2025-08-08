@@ -297,15 +297,13 @@ function formatTimestamp(timestamp) {
 
 async function executeTransaction() {
   if (!canExecuteTransaction.value) return;
-  
+
   try {
     const result = await executeUnifiedTransaction(
-      selectedBlockchain.value,
       amount.value,
-      selectedWallet.value,
       onTransactionComplete
     );
-    
+
     console.log('Transaction completed:', result);
   } catch (error) {
     console.error('Transaction failed:', error);
@@ -314,14 +312,12 @@ async function executeTransaction() {
 
 async function executeTestTransaction() {
   if (!selectedBlockchain.value || !selectedWallet.value) return;
-  
+
   try {
     const result = await testTransaction(
-      selectedBlockchain.value,
-      selectedWallet.value,
       onTransactionComplete
     );
-    
+
     console.log('Test transaction completed:', result);
   } catch (error) {
     console.error('Test transaction failed:', error);
