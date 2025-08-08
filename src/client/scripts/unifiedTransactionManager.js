@@ -442,6 +442,51 @@ export function clearTransactionHistory() {
   transactionHistory.splice(0);
 }
 
+// Send transaction to server for verification
+export async function verifyTransactionOnServer({ chainType, txHash, expectedAmount, userAddress }) {
+  try {
+    const response = await axios.post('/api/verify/verify-transaction', {
+      chainType,
+      txHash,
+      expectedAmount,
+      userAddress
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.data.success) {
+      return {
+        verified: response.data.verified,
+        blockNumber: response.data.blockNumber,
+        actualAmount: response.data.actualAmount,
+        confirmations: response.data.confirmations,
+        error: response.data.error
+      };
+    } else {
+      throw new Error(response.data.message || 'Server verification failed');
+    }
+  } catch (error) {
+    console.error('[VERIFICATION] Server request failed:', error);
+    throw new Error(`Server verification request failed: ${error.message}`);
+  }
+}
+
+// Get current user address from global store
+export function getUserAddress() {
+  try {
+    if (typeof window !== 'undefined') {
+      const globalStore = useGlobalStore();
+      return globalStore.wallet_connected_address;
+    }
+    return null;
+  } catch (error) {
+    console.error('[USER_ADDRESS] Error getting user address:', error);
+    return null;
+  }
+}
+
 // Test transaction function with small amounts - now uses global store
 export async function testTransaction(callback = null) {
   const globalStore = useGlobalStore();
