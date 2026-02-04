@@ -18,6 +18,9 @@ import { sendTransactionsSolana } from './chains/solana.js';
 import { sendTransactionsBitcoin } from './chains/bitcoin.js';
 import { sendTransactionsCardano } from './chains/cardano.js';
 import { sendTransactionsSui } from './chains/sui.js';
+import { useGlobalStore } from '../stores/global.js';
+import { authChecker } from './authenticationChecker.js';
+import { cryptobet } from './cryptobet.js';
 
 // Transaction status constants
 export const TRANSACTION_STATUS = {
@@ -136,38 +139,102 @@ export class UnifiedTransactionManager {
           throw new Error(`Unsupported blockchain: ${chainType}`);
       }
 
-      // Update transaction status on success
-      transactionStatus.status = TRANSACTION_STATUS.SUCCESS;
+      // Update transaction status to pending verification
+      transactionStatus.status = TRANSACTION_STATUS.PENDING;
       transactionStatus.txHash = txHash;
       transactionStatus.endTime = Date.now();
-      
+
       this.activeTransactions.set(transactionId, transactionStatus);
 
-      // Log successful transaction
+      // Log transaction submitted for verification
       transactionLogger.log({
         transactionId,
         chainType,
         amount,
         txHash,
-        status: TRANSACTION_STATUS.SUCCESS,
-        action: 'transaction_completed',
+        status: TRANSACTION_STATUS.PENDING,
+        action: 'transaction_submitted_for_verification',
         duration: transactionStatus.endTime - transactionStatus.startTime
       });
 
-      // Execute callback for completion
+      // Execute callback for submission
       if (options.onStatusChange) {
         options.onStatusChange(transactionStatus);
       }
-      if (options.onComplete) {
-        options.onComplete(transactionStatus);
-      }
 
-      return {
-        success: true,
-        transactionId,
-        txHash,
-        status: TRANSACTION_STATUS.SUCCESS
-      };
+      // Send transaction to server for verification
+      try {
+        const verificationResult = await this.verifyTransactionOnServer({
+          chainType,
+          txHash,
+          expectedAmount: amount,
+          userAddress: this.getUserAddress()
+        });
+
+        if (verificationResult.verified) {
+          // Update transaction status on server verification success
+          transactionStatus.status = TRANSACTION_STATUS.SUCCESS;
+          transactionStatus.verified = true;
+          transactionStatus.blockNumber = verificationResult.blockNumber;
+
+          this.activeTransactions.set(transactionId, transactionStatus);
+
+          // Log verified transaction
+          transactionLogger.log({
+            transactionId,
+            chainType,
+            amount,
+            txHash,
+            status: TRANSACTION_STATUS.SUCCESS,
+            action: 'transaction_verified_by_server',
+            blockNumber: verificationResult.blockNumber
+          });
+
+          // Execute completion callback
+          if (options.onComplete) {
+            options.onComplete(transactionStatus);
+          }
+
+          return {
+            success: true,
+            transactionId,
+            txHash,
+            status: TRANSACTION_STATUS.SUCCESS,
+            verified: true,
+            blockNumber: verificationResult.blockNumber
+          };
+        } else {
+          // Server verification failed
+          throw new Error(`Server verification failed: ${verificationResult.error}`);
+        }
+      } catch (verificationError) {
+        console.error('[VERIFICATION] Server verification failed:', verificationError);
+
+        // Update transaction status to failed verification
+        transactionStatus.status = TRANSACTION_STATUS.FAILED;
+        transactionStatus.error = `Verification failed: ${verificationError.message}`;
+        transactionStatus.verified = false;
+
+        this.activeTransactions.set(transactionId, transactionStatus);
+
+        // Log verification failure
+        transactionLogger.log({
+          transactionId,
+          chainType,
+          amount,
+          txHash,
+          status: TRANSACTION_STATUS.FAILED,
+          action: 'transaction_verification_failed',
+          error: verificationError.message
+        });
+
+        // Execute error callback
+        if (options.onError) {
+          options.onError(verificationError, transactionStatus);
+        }
+
+        throw verificationError;
+      }
 
     } catch (error) {
       // Update transaction status on failure
@@ -313,13 +380,76 @@ export class UnifiedTransactionManager {
       }
     }
   }
+
+  // Send transaction to server for verification
+  async verifyTransactionOnServer({ chainType, txHash, expectedAmount, userAddress }) {
+    try {
+      const response = await axios.post('/api/verify/verify-transaction', {
+        chainType,
+        txHash,
+        expectedAmount,
+        userAddress
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.success) {
+        return {
+          verified: response.data.verified,
+          blockNumber: response.data.blockNumber,
+          actualAmount: response.data.actualAmount,
+          confirmations: response.data.confirmations,
+          error: response.data.error
+        };
+      } else {
+        throw new Error(response.data.message || 'Server verification failed');
+      }
+    } catch (error) {
+      console.error('[VERIFICATION] Server request failed:', error);
+      throw new Error(`Server verification request failed: ${error.message}`);
+    }
+  }
+
+  // Get current user address from global store
+  getUserAddress() {
+    try {
+      // Import global store to get current user address
+      if (typeof window !== 'undefined') {
+        const globalStore = useGlobalStore();
+        return globalStore.wallet_connected_address;
+      }
+      return null;
+    } catch (error) {
+      console.error('[USER_ADDRESS] Error getting user address:', error);
+      return null;
+    }
+  }
 }
 
 // Global transaction manager instance
 export const transactionManager = new UnifiedTransactionManager();
 
-// Convenience function for executing transactions
-export async function executeBlockchainTransaction(chainType, walletProvider, amount, callbacks = {}) {
+// Convenience function for executing transactions - now uses global store values automatically
+export async function executeBlockchainTransaction(amount, callbacks = {}) {
+  // Get values from global store
+  const globalStore = useGlobalStore();
+  const chainType = globalStore.crypto_selected;
+  const walletType = globalStore.wallet_selected;
+
+  if (!chainType || !walletType) {
+    throw new Error('No authenticated blockchain or wallet found. Please connect your wallet first.');
+  }
+
+  // Get wallet provider from cryptobet
+  const walletProvider = cryptobet[chainType] && cryptobet[chainType][walletType] ?
+                         cryptobet[chainType][walletType].provider : null;
+
+  if (!walletProvider && !authChecker.shouldSkipAuthentication(chainType)) {
+    throw new Error(`Wallet provider not found for ${walletType} on ${chainType}`);
+  }
+
   return await transactionManager.executeTransaction(chainType, walletProvider, amount, callbacks);
 }
 

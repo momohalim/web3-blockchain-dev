@@ -24,8 +24,8 @@ const pool = new Pool({
 let redisClient;
 let redisConnected = false;
 
-// Check if Redis should be used in development
-const useRedis = process.env.NODE_ENV === 'production' || process.env.USE_REDIS === 'true';
+// Redis enabled by default for all environments
+const useRedis = process.env.USE_REDIS !== 'false'; // Only disable if explicitly set to false
 
 if (useRedis) {
     redisClient = redis.createClient({
@@ -48,7 +48,7 @@ if (useRedis) {
         redisClient = createMockRedisClient();
     }
 } else {
-    console.log('[REDIS] Disabled for development');
+    console.log('[REDIS] Explicitly disabled via USE_REDIS=false');
     redisConnected = false;
     redisClient = createMockRedisClient();
 }
@@ -57,14 +57,17 @@ function createMockRedisClient() {
     return {
         get: async () => null,
         set: async () => 'OK',
+        setEx: async () => 'OK',
         del: async () => 1,
         exists: async () => 0,
         expire: async () => 1,
+        incr: async () => 1,
         keys: async () => [],
         flushAll: async () => 'OK',
         on: () => {},
         quit: async () => {},
         disconnect: async () => {},
+        connect: async () => {},
         isOpen: true
     };
 }
@@ -189,6 +192,18 @@ async function redeemCode(walletAddress, code) {
 }
 
 ////////////////////////////////////////////////////////////////
+
+// Graceful shutdown for Redis
+process.on('SIGINT', async () => {
+  if (redisConnected && redisClient) {
+    try {
+      await redisClient.quit();
+      console.log('[REDIS] Connection closed gracefully');
+    } catch (error) {
+      console.error('[REDIS] Error closing connection:', error);
+    }
+  }
+});
 
 export {
     getUserData,

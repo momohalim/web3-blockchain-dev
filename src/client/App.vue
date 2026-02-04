@@ -49,6 +49,7 @@ const BackgroundAndButtons = computed(() => defineAsyncComponent(() => import(`.
 
 import { useGlobalStore } from "@/client/stores/global";
 import { storeToRefs } from "pinia";
+import { sessionManager } from "@/client/scripts/sessionManager.js";
 
 ////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,14 +60,16 @@ import { storeToRefs } from "pinia";
   };
 
 onMounted(() => {
-  
-  nextTick(() => {
+  // Initialize session manager with global store
+  sessionManager.init(store);
 
+  nextTick(() => {
+    console.log('[APP] Session manager initialized, checking for existing sessions');
   });
 
   onBeforeUnmount(() => {
+    // Clean up session manager if needed
   });
-
 });
 
 </script>

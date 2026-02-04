@@ -206,6 +206,7 @@ import { updateAptosWalletsAvailable, selectWalletAptos, disconnectWalletAptos }
 import { updateEthereumWalletsAvailable, selectWalletEthereum, disconnectWalletEthereum } from "../../scripts/chains/ethereum.js";
 import { updateBitcoinWalletsAvailable, selectWalletBitcoin, disconnectWalletBitcoin } from "../../scripts/chains/bitcoin.js";
 import { updateCardanoWalletsAvailable, selectWalletCardano, disconnectWalletCardano } from "../../scripts/chains/cardano.js";
+import { authChecker } from "../../scripts/authenticationChecker.js";
 
 import { onFrontendLogout } from "../../scripts/chains/shared.js";
 import { useGlobalStore } from '@/client/stores/global';
@@ -233,6 +234,9 @@ export default {
       suiButtons
 		};
 	},	mounted() {
+    // Check if user already has a valid session
+    this.checkExistingSession();
+
     updateSolanaWalletsAvailable();
     updateAptosWalletsAvailable();
     updateEthereumWalletsAvailable();
@@ -248,9 +252,29 @@ export default {
       });
     };
     nextTick(setRandomAnimationDelay);
+  },
 
+  created() {
+    // Check session on component creation
+    this.checkExistingSession();
 	},
 	methods: {
+
+    checkExistingSession() {
+      // Check if user has a valid authentication session
+      if (authChecker.shouldSkipAuthentication()) {
+        const authStatus = authChecker.getAuthenticationStatus();
+        console.log('[WALLET_CONNECT] Found existing session:', authStatus);
+
+        // If session exists, close the overlay and use existing authentication
+        if (authStatus.isAuthenticated) {
+          this.$emit('close_overlay');
+          console.log('[WALLET_CONNECT] Using existing session, skipping wallet connection');
+          return true;
+        }
+      }
+      return false;
+    },
 
 		selectWallet(crypto, wallet) {
 

@@ -9,6 +9,8 @@ import { sendTransactionsBitcoin } from './chains/bitcoin.js';
 import { sendTransactionsCardano } from './chains/cardano.js';
 import { sendTransactionsSui } from './chains/sui.js';
 import { cryptobet } from './cryptobet.js';
+import { authChecker } from './authenticationChecker.js';
+import { useGlobalStore } from '../stores/global.js';
 
 // Transaction status enum
 export const TransactionStatus = {
@@ -180,8 +182,27 @@ const blockchainHandlers = {
   }
 };
 
-// Unified transaction function
-export async function executeUnifiedTransaction(blockchain, amount, walletType, callback = null) {
+// Unified transaction function - now uses global store values automatically
+export async function executeUnifiedTransaction(amount, callback = null) {
+  // Get current authenticated blockchain and wallet from global store
+  const globalStore = useGlobalStore();
+  const blockchain = globalStore.crypto_selected;
+  const walletType = globalStore.wallet_selected;
+
+  if (!blockchain || !walletType) {
+    throw new Error('No authenticated blockchain or wallet found. Please connect your wallet first.');
+  }
+  // Check if we can skip authentication
+  if (authChecker.shouldSkipAuthentication(blockchain)) {
+    const authStatus = authChecker.getAuthenticationStatus();
+    console.log('[TRANSACTION] Using existing authentication session:', authStatus);
+
+    // Update activity to keep session alive
+    authChecker.updateActivity();
+  } else {
+    console.log('[TRANSACTION] No valid session found, will require authentication');
+  }
+
   // Reset transaction state
   transactionState.isTransactionInProgress = true;
   transactionState.currentBlockchain = blockchain;
@@ -211,7 +232,12 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
     // Get wallet provider
     const walletProvider = handler.getProvider(walletType);
     if (!walletProvider) {
-      throw new Error(`Wallet provider not found for ${walletType} on ${blockchain}`);
+      // If no provider found and we don't have a valid session, we need authentication
+      if (!authChecker.shouldSkipAuthentication(blockchain)) {
+        throw new Error(`Wallet not connected. Please connect your ${walletType} wallet for ${blockchain}`);
+      } else {
+        throw new Error(`Wallet provider not found for ${walletType} on ${blockchain}`);
+      }
     }
 
     transactionLogger.log({
@@ -225,8 +251,8 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
     // Execute transaction
     const transactionHash = await handler.sendTransaction(amount, walletProvider, walletType);
     
-    // Update state on success
-    transactionState.currentStatus = TransactionStatus.SUCCESS;
+    // Update state to pending verification
+    transactionState.currentStatus = TransactionStatus.PENDING;
     transactionState.transactionHash = transactionHash;
     transactionState.lastTransactionResult = {
       blockchain,
@@ -234,7 +260,7 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
       amount,
       hash: transactionHash,
       timestamp: new Date().toISOString(),
-      status: TransactionStatus.SUCCESS
+      status: TransactionStatus.PENDING
     };
 
     transactionLogger.log({
@@ -242,9 +268,58 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
       walletType,
       amount,
       transactionHash,
-      message: `Transaction successful! Hash: ${transactionHash}`,
-      status: TransactionStatus.SUCCESS
+      message: `Transaction submitted for verification. Hash: ${transactionHash}`,
+      status: TransactionStatus.PENDING
     });
+
+    // Send transaction to server for verification
+    try {
+      const verificationResult = await verifyTransactionOnServer({
+        chainType: blockchain,
+        txHash: transactionHash,
+        expectedAmount: amount,
+        userAddress: getUserAddress()
+      });
+
+      if (verificationResult.verified) {
+        // Update transaction status on server verification success
+        transactionState.currentStatus = TransactionStatus.SUCCESS;
+        transactionState.lastTransactionResult.status = TransactionStatus.SUCCESS;
+        transactionState.lastTransactionResult.verified = true;
+        transactionState.lastTransactionResult.blockNumber = verificationResult.blockNumber;
+
+        transactionLogger.log({
+          blockchain,
+          walletType,
+          amount,
+          transactionHash,
+          message: `Transaction verified by server! Block: ${verificationResult.blockNumber}`,
+          status: TransactionStatus.SUCCESS
+        });
+      } else {
+        throw new Error(`Server verification failed: ${verificationResult.error}`);
+      }
+    } catch (verificationError) {
+      console.error('[VERIFICATION] Server verification failed:', verificationError);
+
+      // Update transaction status to failed verification
+      transactionState.currentStatus = TransactionStatus.FAILED;
+      transactionState.error = `Verification failed: ${verificationError.message}`;
+      transactionState.lastTransactionResult.status = TransactionStatus.FAILED;
+      transactionState.lastTransactionResult.error = verificationError.message;
+
+      transactionLogger.log({
+        blockchain,
+        walletType,
+        amount,
+        transactionHash,
+        message: `Transaction verification failed: ${verificationError.message}`,
+        status: TransactionStatus.FAILED,
+        error: verificationError.message
+      });
+
+      throw verificationError;
+    }
 
     // Execute callback if provided
     if (callback && typeof callback === 'function') {
@@ -255,7 +330,8 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
           walletType,
           amount,
           transactionHash,
-          status: TransactionStatus.SUCCESS
+          status: TransactionStatus.SUCCESS,
+          verified: true
         });
       } catch (callbackError) {
         console.error('[TRANSACTION] Callback execution failed:', callbackError);
@@ -268,7 +344,8 @@ export async function executeUnifiedTransaction(blockchain, amount, walletType, 
       walletType,
       amount,
       transactionHash,
-      status: TransactionStatus.SUCCESS
+      status: TransactionStatus.SUCCESS,
+      verified: true
     };
 
   } catch (error) {
@@ -365,8 +442,60 @@ export function clearTransactionHistory() {
   transactionHistory.splice(0);
 }
 
-// Test transaction function with small amounts
-export async function testTransaction(blockchain, walletType, callback = null) {
+// Send transaction to server for verification
+export async function verifyTransactionOnServer({ chainType, txHash, expectedAmount, userAddress }) {
+  try {
+    const response = await axios.post('/api/verify/verify-transaction', {
+      chainType,
+      txHash,
+      expectedAmount,
+      userAddress
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.data.success) {
+      return {
+        verified: response.data.verified,
+        blockNumber: response.data.blockNumber,
+        actualAmount: response.data.actualAmount,
+        confirmations: response.data.confirmations,
+        error: response.data.error
+      };
+    } else {
+      throw new Error(response.data.message || 'Server verification failed');
+    }
+  } catch (error) {
+    console.error('[VERIFICATION] Server request failed:', error);
+    throw new Error(`Server verification request failed: ${error.message}`);
+  }
+}
+
+// Get current user address from global store
+export function getUserAddress() {
+  try {
+    if (typeof window !== 'undefined') {
+      const globalStore = useGlobalStore();
+      return globalStore.wallet_connected_address;
+    }
+    return null;
+  } catch (error) {
+    console.error('[USER_ADDRESS] Error getting user address:', error);
+    return null;
+  }
+}
+
+// Test transaction function with small amounts - now uses global store
+export async function testTransaction(callback = null) {
+  const globalStore = useGlobalStore();
+  const blockchain = globalStore.crypto_selected;
+
+  if (!blockchain) {
+    throw new Error('No authenticated blockchain found. Please connect your wallet first.');
+  }
+
   const testAmounts = {
     ethereum: 0.0001,  // 0.0001 ETH
     solana: 0.001,     // 0.001 SOL
@@ -381,5 +510,5 @@ export async function testTransaction(blockchain, walletType, callback = null) {
     throw new Error(`Test amount not defined for ${blockchain}`);
   }
 
-  return await executeUnifiedTransaction(blockchain, amount, walletType, callback);
+  return await executeUnifiedTransaction(amount, callback);
 }

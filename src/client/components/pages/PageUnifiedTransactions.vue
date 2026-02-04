@@ -7,43 +7,26 @@
 
     <!-- Transaction Form -->
     <div class="transaction-form">
-      <div class="form-section">
-        <label class="form-label">Select Blockchain</label>
-        <select 
-          v-model="selectedBlockchain" 
-          class="form-select"
-          :disabled="transactionState.isTransactionInProgress"
-        >
-          <option value="">Choose blockchain...</option>
-          <option 
-            v-for="blockchain in supportedBlockchains" 
-            :key="blockchain" 
-            :value="blockchain"
-          >
-            {{ getBlockchainInfo(blockchain)?.name || blockchain }} ({{ getBlockchainInfo(blockchain)?.symbol || blockchain }})
-          </option>
-        </select>
+      <!-- Show current authenticated blockchain and wallet -->
+      <div class="current-session" v-if="is_authenticated">
+        <h3>Current Session</h3>
+        <div class="session-info">
+          <div class="session-item">
+            <span class="session-label">Blockchain:</span>
+            <span class="session-value">{{ getBlockchainInfo(selectedBlockchain)?.name || selectedBlockchain }} ({{ getBlockchainInfo(selectedBlockchain)?.symbol || selectedBlockchain }})</span>
+          </div>
+          <div class="session-item">
+            <span class="session-label">Wallet:</span>
+            <span class="session-value">{{ formatWalletName(selectedWallet) }}</span>
+          </div>
+        </div>
       </div>
 
-      <div class="form-section" v-if="selectedBlockchain">
-        <label class="form-label">Select Wallet</label>
-        <select 
-          v-model="selectedWallet" 
-          class="form-select"
-          :disabled="transactionState.isTransactionInProgress"
-        >
-          <option value="">Choose wallet...</option>
-          <option 
-            v-for="wallet in getAvailableWallets(selectedBlockchain)" 
-            :key="wallet" 
-            :value="wallet"
-          >
-            {{ formatWalletName(wallet) }}
-          </option>
-        </select>
+      <div class="auth-required" v-else>
+        <p>Please authenticate with a wallet to execute transactions.</p>
       </div>
 
-      <div class="form-section" v-if="selectedWallet">
+      <div class="form-section" v-if="selectedBlockchain && selectedWallet && is_authenticated">
         <label class="form-label">
           Amount ({{ getBlockchainInfo(selectedBlockchain)?.symbol || selectedBlockchain }})
         </label>
@@ -70,7 +53,7 @@
       </div>
 
       <!-- Transaction Controls -->
-      <div class="transaction-controls" v-if="selectedBlockchain && selectedWallet">
+      <div class="transaction-controls" v-if="selectedBlockchain && selectedWallet && is_authenticated">
         <button 
           @click="executeTransaction"
           class="btn btn-primary transaction-btn"
@@ -213,11 +196,19 @@ import {
   TransactionStatus
 } from '@/client/scripts/unifiedTransactionManager.js';
 import { cryptobet } from '@/client/scripts/cryptobet.js';
+import { useGlobalStore } from '@/client/stores/global.js';
+import { storeToRefs } from 'pinia';
+
+// Get global store values
+const globalStore = useGlobalStore();
+const { crypto_selected, wallet_selected, is_authenticated } = storeToRefs(globalStore);
 
 // Reactive data
-const selectedBlockchain = ref('');
-const selectedWallet = ref('');
 const amount = ref(0);
+
+// Use global store values automatically
+const selectedBlockchain = computed(() => crypto_selected.value);
+const selectedWallet = computed(() => wallet_selected.value);
 
 // Computed properties
 const supportedBlockchains = computed(() => getSupportedBlockchains());
@@ -225,9 +216,10 @@ const supportedBlockchains = computed(() => getSupportedBlockchains());
 const logs = computed(() => transactionLogger.getLogs());
 
 const canExecuteTransaction = computed(() => {
-  return selectedBlockchain.value && 
-         selectedWallet.value && 
-         amount.value > 0 && 
+  return selectedBlockchain.value &&
+         selectedWallet.value &&
+         amount.value > 0 &&
+         is_authenticated.value &&
          !transactionState.isTransactionInProgress;
 });
 
@@ -305,15 +297,13 @@ function formatTimestamp(timestamp) {
 
 async function executeTransaction() {
   if (!canExecuteTransaction.value) return;
-  
+
   try {
     const result = await executeUnifiedTransaction(
-      selectedBlockchain.value,
       amount.value,
-      selectedWallet.value,
       onTransactionComplete
     );
-    
+
     console.log('Transaction completed:', result);
   } catch (error) {
     console.error('Transaction failed:', error);
@@ -322,14 +312,12 @@ async function executeTransaction() {
 
 async function executeTestTransaction() {
   if (!selectedBlockchain.value || !selectedWallet.value) return;
-  
+
   try {
     const result = await testTransaction(
-      selectedBlockchain.value,
-      selectedWallet.value,
       onTransactionComplete
     );
-    
+
     console.log('Test transaction completed:', result);
   } catch (error) {
     console.error('Test transaction failed:', error);
@@ -396,11 +384,7 @@ function showNotification(message, type = 'info') {
   }, 3000);
 }
 
-// Watch for blockchain change to reset wallet selection
-watch(selectedBlockchain, (newBlockchain) => {
-  selectedWallet.value = '';
-  amount.value = 0;
-});
+// Remove blockchain change watcher since we're using global values
 
 // Lifecycle
 onMounted(() => {
@@ -447,6 +431,48 @@ onMounted(() => {
 
 .form-section {
   margin-bottom: 25px;
+}
+
+.current-session {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff88;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.current-session h3 {
+  color: #00ff88;
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+}
+
+.session-info {
+  display: grid;
+  gap: 10px;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-label {
+  font-weight: bold;
+  color: #00ff88;
+}
+
+.session-value {
+  color: white;
+  font-weight: bold;
+}
+
+.auth-required {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+  font-style: italic;
 }
 
 .form-label {
@@ -855,6 +881,14 @@ onMounted(() => {
   color: #666;
   padding: 40px;
   font-style: italic;
+}
+
+.auth-required {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid #f87171;
+  border-radius: 8px;
+  padding: 30px;
+  margin: 20px 0;
 }
 
 /* Responsive Design */

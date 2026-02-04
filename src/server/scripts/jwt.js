@@ -8,8 +8,8 @@ dotenv.config();
 let redisClient;
 let redisConnected = false;
 
-// Check if Redis should be used in development
-const useRedis = process.env.NODE_ENV === 'production' || process.env.USE_REDIS === 'true';
+// Redis enabled by default for all environments
+const useRedis = process.env.USE_REDIS !== 'false'; // Only disable if explicitly set to false
 
 if (useRedis) {
   redisClient = redis.createClient({
@@ -28,7 +28,7 @@ if (useRedis) {
     redisClient = createMockRedisClient();
   }
 } else {
-  console.log('[JWT] Redis disabled for development');
+  console.log('[JWT] Redis explicitly disabled via USE_REDIS=false');
   redisConnected = false;
   redisClient = createMockRedisClient();
 }
@@ -37,14 +37,17 @@ function createMockRedisClient() {
   return {
     get: async () => null,
     set: async () => 'OK',
+    setEx: async () => 'OK',
     del: async () => 1,
     exists: async () => 0,
     expire: async () => 1,
+    incr: async () => 1,
     keys: async () => [],
     flushAll: async () => 'OK',
     on: () => {},
     quit: async () => {},
     disconnect: async () => {},
+    connect: async () => {},
     isOpen: true
   };
 }
@@ -183,5 +186,17 @@ async function refreshJWT(refreshToken) {
     throw err;
   }
 }
+
+// Graceful shutdown for Redis
+process.on('SIGINT', async () => {
+  if (redisConnected && redisClient) {
+    try {
+      await redisClient.quit();
+      console.log('[JWT] Redis connection closed gracefully');
+    } catch (error) {
+      console.error('[JWT] Error closing Redis connection:', error);
+    }
+  }
+});
 
 export { generateJWT, verifyJWT, authenticateJWT, generateRefreshToken, verifyRefreshToken, revokeJWT, refreshJWT };

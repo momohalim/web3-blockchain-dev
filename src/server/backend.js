@@ -28,6 +28,7 @@ import createAuthRouterAptos from './routes/authAptos.js';
 import createAuthRouterSolana from './routes/authSolana.js';
 import CreateProtectedRoutes from './routes/protected.js';
 import CreateUnprotectedRoutes from './routes/unprotected.js';
+import CreateTransactionVerificationRoutes from './routes/transactionVerification.js';
 
 import './scripts/data.js'; // Import the data module to initialize the database connection
 import './scripts/websocketServer.js'; // Import the WebSocket server
@@ -80,8 +81,8 @@ async function startServer() {
     //     next();
     // });
     // d:/Work/2025/CyberBet.Games/source/database-update/database_update/databases/mongodb/data
-    // Check if Redis should be used in development
-    const useRedis = process.env.NODE_ENV === 'production' || process.env.USE_REDIS === 'true';
+    // Redis enabled by default for all environments
+    const useRedis = process.env.USE_REDIS !== 'false'; // Only disable if explicitly set to false
 
     let redisConnected = false;
     let effectiveRedisClient;
@@ -106,7 +107,7 @@ async function startServer() {
             effectiveRedisClient = createMockRedisClient();
         }
     } else {
-        console.log('⚠️  Redis disabled for development');
+        console.log('⚠️  Redis explicitly disabled via USE_REDIS=false');
         redisConnected = false;
         effectiveRedisClient = createMockRedisClient();
     }
@@ -115,19 +116,22 @@ async function startServer() {
         return {
             get: async () => null,
             set: async () => 'OK',
+            setEx: async () => 'OK',
             del: async () => 1,
             exists: async () => 0,
             expire: async () => 1,
+            incr: async () => 1,
             keys: async () => [],
             flushAll: async () => 'OK',
             on: () => {},
             quit: async () => {},
             disconnect: async () => {},
+            connect: async () => {},
             isOpen: true
         };
     }
     if (redisConnected) {
-        redisClient.on('error', (err) => console.error('Redis Client Error |', err));
+        effectiveRedisClient.on('error', (err) => console.error('Redis Client Error |', err));
     }
 
     const unprotectedRoutes = CreateUnprotectedRoutes(effectiveRedisClient);
@@ -146,7 +150,9 @@ async function startServer() {
     app.use('/api', authRoutesSolana);
 
     const protectedRoutes = CreateProtectedRoutes(effectiveRedisClient);
+    const transactionVerificationRoutes = CreateTransactionVerificationRoutes(effectiveRedisClient);
     app.use('/api', protectedRoutes);
+    app.use('/api/verify', transactionVerificationRoutes);
 
     // Serve static files from the dist folder
     const distPath = path.resolve(process.cwd(), 'dist');
@@ -159,7 +165,28 @@ async function startServer() {
         res.status(500).json({ error: 'Internal server error' });
     });
 
-    app.listen(PORT_EXPRESS, () => console.log(`Express running on port ${PORT_EXPRESS}`));
+    const server = app.listen(PORT_EXPRESS, () => console.log(`Express running on port ${PORT_EXPRESS}`));
+
+    // Graceful shutdown handling
+    process.on('SIGINT', async () => {
+        console.log('\n🛑 Shutdown signal received, closing server...');
+
+        // Close Redis connections
+        if (redisConnected && effectiveRedisClient) {
+            try {
+                await effectiveRedisClient.quit();
+                console.log('✅ Redis connection closed gracefully');
+            } catch (error) {
+                console.error('❌ Error closing Redis connection:', error);
+            }
+        }
+
+        // Close Express server
+        server.close(() => {
+            console.log('✅ Express server closed gracefully');
+            process.exit(0);
+        });
+    });
 }
 
 startServer();

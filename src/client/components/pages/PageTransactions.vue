@@ -6,25 +6,34 @@
     </div>
 
     <div class="transaction-form-container">
-      <div class="blockchain-selector">
-        <h3>Select Blockchain</h3>
-        <div class="blockchain-grid">
-          <div 
-            v-for="blockchain in blockchains" 
-            :key="blockchain.id"
-            :class="['blockchain-card', { active: selectedBlockchain === blockchain.id }]"
-            @click="selectBlockchain(blockchain.id)"
-          >
-            <div class="blockchain-icon">{{ blockchain.icon }}</div>
-            <div class="blockchain-name">{{ blockchain.name }}</div>
-            <div class="blockchain-status" :class="blockchain.status">
-              {{ blockchain.status }}
-            </div>
+      <!-- Show current authenticated session -->
+      <div class="current-session" v-if="is_authenticated">
+        <h3>Current Authenticated Session</h3>
+        <div class="session-info">
+          <div class="session-item">
+            <span class="session-label">Blockchain:</span>
+            <span class="session-value">
+              {{ blockchains.find(b => b.id === selectedBlockchain)?.name || selectedBlockchain }}
+              ({{ blockchains.find(b => b.id === selectedBlockchain)?.symbol || selectedBlockchain }})
+            </span>
+          </div>
+          <div class="session-item">
+            <span class="session-label">Wallet:</span>
+            <span class="session-value">{{ wallet_selected }}</span>
+          </div>
+          <div class="session-item">
+            <span class="session-label">Address:</span>
+            <span class="session-value address">{{ wallet_connected_address }}</span>
           </div>
         </div>
       </div>
 
-      <div class="transaction-form" v-if="selectedBlockchain">
+      <div class="auth-required" v-else>
+        <h3>Authentication Required</h3>
+        <p>Please connect your wallet to execute transactions. Transactions will automatically use your authenticated blockchain and wallet.</p>
+      </div>
+
+      <div class="transaction-form" v-if="selectedBlockchain && is_authenticated">
         <div class="form-group">
           <label for="amount">Amount</label>
           <input 
@@ -147,6 +156,7 @@ import {
 
 // Import blockchain specific modules
 import { cryptobet } from '@/client/scripts/cryptobet';
+import { authChecker } from '@/client/scripts/authenticationChecker.js';
 
 const store = useGlobalStore();
 const { 
@@ -157,8 +167,8 @@ const {
   wallet_selected 
 } = storeToRefs(store);
 
-// Component state
-const selectedBlockchain = ref('');
+// Component state - automatically use global store values
+const selectedBlockchain = computed(() => crypto_selected.value);
 const transactionAmount = ref(0.001);
 const isExecuting = ref(false);
 const currentTransaction = ref(null);
@@ -228,18 +238,21 @@ const walletInfo = computed(() => {
 });
 
 const canExecuteTransaction = computed(() => {
-  return selectedBlockchain.value && 
-         transactionAmount.value > 0 && 
-         is_authenticated.value && 
+  // Check if we have a valid session or are authenticated
+  const hasValidAuth = is_authenticated.value || authChecker.shouldSkipAuthentication(selectedBlockchain.value);
+
+  return selectedBlockchain.value &&
+         transactionAmount.value > 0 &&
+         hasValidAuth &&
          !isExecuting.value;
 });
 
-// Methods
-function selectBlockchain(blockchainId) {
-  selectedBlockchain.value = blockchainId;
-  // Update blockchain status based on wallet connectivity
-  updateBlockchainStatus(blockchainId);
-}
+// Methods - remove manual selection since we use global store
+// function selectBlockchain(blockchainId) {
+//   selectedBlockchain.value = blockchainId;
+//   // Update blockchain status based on wallet connectivity
+//   updateBlockchainStatus(blockchainId);
+// }
 
 function updateBlockchainStatus(blockchainId) {
   const blockchain = blockchains.value.find(b => b.id === blockchainId);
@@ -269,20 +282,26 @@ function checkWalletAvailability(blockchainId) {
   }
 }
 
-function getWalletProvider(blockchainId) {
+function getWalletProvider() {
+  // Always use the global store selected wallet and blockchain
+  const blockchainId = selectedBlockchain.value;
+  const walletId = wallet_selected.value;
+
+  if (!blockchainId || !walletId) return null;
+
   switch (blockchainId) {
     case 'ethereum':
-      return cryptobet.ethereum[wallet_selected.value]?.provider;
+      return cryptobet.ethereum[walletId]?.provider;
     case 'solana':
-      return cryptobet.solana[wallet_selected.value]?.provider;
+      return cryptobet.solana[walletId]?.provider;
     case 'bitcoin':
-      return cryptobet.bitcoin[wallet_selected.value]?.provider;
+      return cryptobet.bitcoin[walletId]?.provider;
     case 'aptos':
-      return cryptobet.aptos[wallet_selected.value]?.provider;
+      return cryptobet.aptos[walletId]?.provider;
     case 'cardano':
-      return cryptobet.cardano[wallet_selected.value]?.provider;
+      return cryptobet.cardano[walletId]?.provider;
     case 'sui':
-      return cryptobet.sui[wallet_selected.value]?.provider;
+      return cryptobet.sui[walletId]?.provider;
     default:
       return null;
   }
@@ -291,18 +310,24 @@ function getWalletProvider(blockchainId) {
 async function executeTransaction() {
   if (!canExecuteTransaction.value) return;
 
+  // Check if we can skip authentication
+  if (authChecker.shouldSkipAuthentication(selectedBlockchain.value)) {
+    console.log('[TRANSACTION] Using existing session, skipping wallet connection');
+    authChecker.updateActivity();
+  } else if (!is_authenticated.value) {
+    throw new Error('Please connect your wallet first');
+  }
+
   isExecuting.value = true;
   currentTransaction.value = null;
 
   try {
-    const walletProvider = getWalletProvider(selectedBlockchain.value);
-    if (!walletProvider) {
-      throw new Error('Wallet provider not found');
+    const walletProvider = getWalletProvider();
+    if (!walletProvider && !authChecker.shouldSkipAuthentication(selectedBlockchain.value)) {
+      throw new Error('Wallet provider not found. Please connect your wallet.');
     }
 
     const result = await executeBlockchainTransaction(
-      selectedBlockchain.value,
-      walletProvider,
       transactionAmount.value,
       {
         onStatusChange: (status) => {
@@ -750,6 +775,66 @@ onMounted(() => {
   text-align: center;
   color: #666;
   font-style: italic;
+}
+
+.current-session {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid #00ff88;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+}
+
+.current-session h3 {
+  color: #00ff88;
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+}
+
+.session-info {
+  display: grid;
+  gap: 10px;
+}
+
+.session-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-label {
+  font-weight: bold;
+  color: #00ff88;
+}
+
+.session-value {
+  color: white;
+  font-weight: bold;
+}
+
+.session-value.address {
+  font-family: monospace;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.auth-required {
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid #f87171;
+  border-radius: 8px;
+  padding: 30px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.auth-required h3 {
+  color: #f87171;
+  margin: 0 0 15px 0;
+}
+
+.auth-required p {
+  color: #888;
+  margin: 0;
 }
 
 /* Responsive design */

@@ -28,6 +28,7 @@ import { websocketGet } from '../../scripts/websocketClient';
 
 
 import OverlayWalletsConnect from '../overlays/OverlayWalletsConnect.vue';
+import { authChecker } from '../../scripts/authenticationChecker.js';
 
 export default {
   name: 'GamesDisplay',
@@ -53,13 +54,26 @@ export default {
   },
   methods: {
     onGameClicked(event, gameName) {
-      if (!this.is_authenticated) {
-        this.navigation_state_overlay = 'wallets_connect'; // Show overlay if not authenticated
+      // Check for existing valid session first
+      if (authChecker.shouldSkipAuthentication()) {
+        const authStatus = authChecker.getAuthenticationStatus();
+        console.log('[GAMES] Using existing session for game access:', authStatus);
+
+        // Update activity and allow game access
+        authChecker.updateActivity();
+
+        if (event.target.classList.contains('unlocked') || event.target.parentNode.classList.contains('unlocked')) {
+          this.$emit('game-clicked', gameName);
+        }
         return;
-      } else if ( event.target.classList.contains('unlocked') || event.target.parentNode.classList.contains('unlocked') ) {
+      }
 
-      this.$emit('game-clicked', gameName)
-
+      // If no valid session and not authenticated, show wallet connect
+      if (!this.is_authenticated) {
+        this.navigation_state_overlay = 'wallets_connect';
+        return;
+      } else if (event.target.classList.contains('unlocked') || event.target.parentNode.classList.contains('unlocked')) {
+        this.$emit('game-clicked', gameName);
       }
     },
   },
